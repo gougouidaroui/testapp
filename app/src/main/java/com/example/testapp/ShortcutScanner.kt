@@ -6,7 +6,7 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.LauncherApps
 import android.content.pm.PackageManager
 import android.content.pm.ResolveInfo
-import android.content.pm.ShortcutInfo
+import android.graphics.drawable.Drawable
 import android.os.Build
 import android.os.UserHandle
 import android.util.Log
@@ -21,27 +21,33 @@ class ShortcutScanner(private val context: Context) {
         val shortcuts = mutableListOf<AppShortcutInfo>()
 
         try {
-            // Get all shortcuts in parallel
-            val launchableApps = getLaunchableApps()
+            Log.d("ShortcutScanner", "=== Starting comprehensive app and shortcut scan ===")
+
+            // 1. Get ALL launchable apps (main priority)
+            val launchableApps = getAllLaunchableApps()
+            Log.d("ShortcutScanner", "Found ${launchableApps.size} launchable apps")
+            shortcuts.addAll(launchableApps)
             yield() // Allow other coroutines to run
 
+            // 2. Get legacy shortcuts
             val legacyShortcuts = getLegacyShortcuts()
+            Log.d("ShortcutScanner", "Found ${legacyShortcuts.size} legacy shortcuts")
+            shortcuts.addAll(legacyShortcuts)
             yield()
 
-            val appShortcuts = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {
-                getAppShortcuts()
-            } else {
-                emptyList()
+            // 3. Get modern app shortcuts (if available)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N_MR1) {
+                val appShortcuts = getAppShortcuts()
+                Log.d("ShortcutScanner", "Found ${appShortcuts.size} app shortcuts")
+                shortcuts.addAll(appShortcuts)
             }
             yield()
 
-            // Combine all shortcuts
-            shortcuts.addAll(launchableApps)
-            shortcuts.addAll(legacyShortcuts)
-            shortcuts.addAll(appShortcuts)
+            // Remove duplicates efficiently by ID
+            val uniqueShortcuts = shortcuts.distinctBy { it.id }
+            Log.d("ShortcutScanner", "=== Scan complete: ${uniqueShortcuts.size} total shortcuts ===")
 
-            // Remove duplicates efficiently
-            shortcuts.distinctBy { it.id }
+            uniqueShortcuts
 
         } catch (e: Exception) {
             Log.e("ShortcutScanner", "Error scanning shortcuts", e)
@@ -49,47 +55,121 @@ class ShortcutScanner(private val context: Context) {
         }
     }
 
-    private suspend fun getLaunchableApps(): List<AppShortcutInfo> = withContext(Dispatchers.IO) {
+    private suspend fun getAllLaunchableApps(): List<AppShortcutInfo> = withContext(Dispatchers.IO) {
         val shortcuts = mutableListOf<AppShortcutInfo>()
         val packageManager = context.packageManager
 
         try {
+            // Method 1: Query using MAIN/LAUNCHER intent
             val intent = Intent(Intent.ACTION_MAIN).apply {
                 addCategory(Intent.CATEGORY_LAUNCHER)
             }
 
-            val apps = packageManager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+            val resolveInfos = packageManager.queryIntentActivities(intent, 0)
+            Log.d("ShortcutScanner", "Found ${resolveInfos.size} activities with MAIN/LAUNCHER")
 
-            for (app in apps) {
+            for (resolveInfo in resolveInfos) {
                 try {
-                    val launchIntent = packageManager.getLaunchIntentForPackage(app.activityInfo.packageName)
+                    val packageName = resolveInfo.activityInfo.packageName
+                    val appInfo = resolveInfo.activityInfo.applicationInfo
+
+                    // Get launch intent
+                    val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
 
                     if (launchIntent != null) {
+                        // Get app icon and label
+                        val icon: Drawable? = try {
+                            resolveInfo.loadIcon(packageManager)
+                        } catch (e: Exception) {
+                            Log.w("ShortcutScanner", "Failed to load icon for $packageName", e)
+                            null
+                        }
+
+                        val label = try {
+                            resolveInfo.loadLabel(packageManager).toString()
+                        } catch (e: Exception) {
+                            packageName // Fallback to package name
+                        }
+
                         shortcuts.add(
                             AppShortcutInfo(
-                                id = "app_${app.activityInfo.packageName}",
-                                packageName = app.activityInfo.packageName,
-                                label = app.loadLabel(packageManager).toString(),
-                                icon = app.loadIcon(packageManager),
+                                id = "app_$packageName",
+                                packageName = packageName,
+                                label = label,
+                                icon = icon,
                                 intent = launchIntent,
                                 type = ShortcutType.DIRECT_LAUNCH
                             )
                         )
                     }
 
-                    // Yield periodically to avoid blocking
-                    if (shortcuts.size % 10 == 0) {
+                    // Yield every 20 apps to prevent blocking
+                    if (shortcuts.size % 20 == 0) {
                         yield()
                     }
 
                 } catch (e: Exception) {
-                    Log.w("ShortcutScanner", "Error loading app: ${app.activityInfo.packageName}", e)
+                    Log.w("ShortcutScanner", "Error processing app: ${resolveInfo.activityInfo?.packageName}", e)
                 }
             }
+
+            // Method 2: Also get installed apps that might not have LAUNCHER category
+            val installedApps = packageManager.getInstalledApplications(PackageManager.GET_META_DATA)
+            val existingPackages = shortcuts.map { it.packageName }.toSet()
+
+            for (appInfo in installedApps) {
+                try {
+                    // Skip if we already have this app
+                    if (existingPackages.contains(appInfo.packageName)) continue
+
+                    // Skip system apps that aren't updated (to reduce clutter)
+                    val isSystemApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
+                    val isUpdatedSystemApp = (appInfo.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
+
+                    if (isSystemApp && !isUpdatedSystemApp) continue
+
+                    // Try to get launch intent
+                    val launchIntent = packageManager.getLaunchIntentForPackage(appInfo.packageName)
+
+                    if (launchIntent != null) {
+                        val icon: Drawable? = try {
+                            appInfo.loadIcon(packageManager)
+                        } catch (e: Exception) {
+                            null
+                        }
+
+                        val label = try {
+                            appInfo.loadLabel(packageManager).toString()
+                        } catch (e: Exception) {
+                            appInfo.packageName
+                        }
+
+                        shortcuts.add(
+                            AppShortcutInfo(
+                                id = "app_${appInfo.packageName}",
+                                packageName = appInfo.packageName,
+                                label = label,
+                                icon = icon,
+                                intent = launchIntent,
+                                type = ShortcutType.DIRECT_LAUNCH
+                            )
+                        )
+                    }
+
+                    if (shortcuts.size % 20 == 0) {
+                        yield()
+                    }
+
+                } catch (e: Exception) {
+                    Log.w("ShortcutScanner", "Error processing installed app: ${appInfo.packageName}", e)
+                }
+            }
+
         } catch (e: Exception) {
             Log.e("ShortcutScanner", "Error getting launchable apps", e)
         }
 
+        Log.d("ShortcutScanner", "Collected ${shortcuts.size} launchable apps")
         shortcuts
     }
 
@@ -104,6 +184,12 @@ class ShortcutScanner(private val context: Context) {
             for (resolveInfo in resolveInfos) {
                 try {
                     val label = resolveInfo.loadLabel(packageManager).toString()
+                    val icon = try {
+                        resolveInfo.loadIcon(packageManager)
+                    } catch (e: Exception) {
+                        null
+                    }
+
                     val intent = Intent().apply {
                         component = resolveInfo.activityInfo.let {
                             android.content.ComponentName(it.packageName, it.name)
@@ -116,14 +202,14 @@ class ShortcutScanner(private val context: Context) {
                             id = "legacy_${resolveInfo.activityInfo.packageName}_${resolveInfo.activityInfo.name}",
                             packageName = resolveInfo.activityInfo.packageName,
                             label = label,
-                            icon = resolveInfo.loadIcon(packageManager),
+                            icon = icon,
                             intent = intent,
                             type = ShortcutType.LEGACY_SHORTCUT
                         )
                     )
 
                     // Yield periodically
-                    if (shortcuts.size % 5 == 0) {
+                    if (shortcuts.size % 10 == 0) {
                         yield()
                     }
 
@@ -146,9 +232,8 @@ class ShortcutScanner(private val context: Context) {
             val launcherApps = context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as LauncherApps
             val packageManager = context.packageManager
 
-            // Get only user apps to avoid system app issues
+            // Get all installed apps (both user and system)
             val installedApps = packageManager.getInstalledApplications(PackageManager.GET_META_DATA)
-                .filter { (it.flags and ApplicationInfo.FLAG_SYSTEM) == 0 || (it.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0 }
 
             for (appInfo in installedApps) {
                 try {
@@ -166,18 +251,20 @@ class ShortcutScanner(private val context: Context) {
                     if (shortcutInfoList != null) {
                         for (shortcutInfo in shortcutInfoList) {
                             if (shortcutInfo.isEnabled) {
+                                val icon: Drawable? = try {
+                                    launcherApps.getShortcutIconDrawable(shortcutInfo,
+                                        context.resources.displayMetrics.densityDpi)
+                                } catch (e: Exception) {
+                                    null
+                                }
+
                                 shortcuts.add(
                                     AppShortcutInfo(
                                         id = "shortcut_${appInfo.packageName}_${shortcutInfo.id}",
                                         packageName = appInfo.packageName,
                                         label = shortcutInfo.shortLabel?.toString() ?: "Unknown",
                                         longLabel = shortcutInfo.longLabel?.toString(),
-                                        icon = try {
-                                            launcherApps.getShortcutIconDrawable(shortcutInfo,
-                                                context.resources.displayMetrics.densityDpi)
-                                        } catch (e: Exception) {
-                                            null
-                                        },
+                                        icon = icon,
                                         intent = shortcutInfo.intent ?: Intent(),
                                         type = ShortcutType.APP_SHORTCUT
                                     )
@@ -190,7 +277,7 @@ class ShortcutScanner(private val context: Context) {
                     yield()
 
                 } catch (e: SecurityException) {
-                    // Expected for apps without launcher permission
+                    // Expected for apps without launcher permission - skip silently
                 } catch (e: Exception) {
                     Log.w("ShortcutScanner", "Error accessing shortcuts for ${appInfo.packageName}", e)
                 }

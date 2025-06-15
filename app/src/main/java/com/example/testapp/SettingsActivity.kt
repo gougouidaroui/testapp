@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
@@ -48,8 +48,7 @@ fun SettingsScreen(onBackPressed: () -> Unit) {
     val shortcutRepository = remember { ShortcutRepository.getInstance(context) }
     val gyroscopeManager = remember { GyroscopeManager(context) }
 
-    // Use StateFlow from repository
-    val shortcutScanner = remember { ShortcutScanner(context) }
+    // Use StateFlow from repository - CHANGED METHOD NAME
     val shortcuts by shortcutRepository.shortcuts.collectAsState()
     val isLoading by shortcutRepository.isLoading.collectAsState()
     val error by shortcutRepository.error.collectAsState()
@@ -62,7 +61,7 @@ fun SettingsScreen(onBackPressed: () -> Unit) {
 
     // Trigger shortcut loading when screen opens
     LaunchedEffect(Unit) {
-        shortcutRepository.getShortcuts() // This will start loading if needed
+        shortcutRepository.fetchShortcuts() // This will load from cache first, then refresh in background
     }
 
     Scaffold(
@@ -83,7 +82,7 @@ fun SettingsScreen(onBackPressed: () -> Unit) {
                             else -> onBackPressed()
                         }
                     }) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
@@ -500,7 +499,7 @@ fun ShortcutSelectionScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBackPressed) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 }
             )

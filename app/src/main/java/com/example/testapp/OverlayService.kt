@@ -1,6 +1,7 @@
 package com.example.testapp
 
 import android.annotation.SuppressLint
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
@@ -34,6 +35,7 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.platform.WindowRecomposerFactory.Companion
 import androidx.compose.ui.platform.compositionContext
+import androidx.core.app.NotificationCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
@@ -46,7 +48,8 @@ import kotlinx.coroutines.coroutineScope
 import kotlin.math.abs
 
 class OverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
-
+    private val NOTIFICATION_ID = 1 // Or any unique integer
+    private val CHANNEL_ID = "OverlayServiceChannel"
     private lateinit var windowManager: WindowManager
     private var overlayView: View? = null
     private val notificationChannelId = "OverlayServiceChannel"
@@ -100,6 +103,9 @@ class OverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        createNotificationChannel() // Ensure channel is created (Android 8.0+)
+        val notification = createNotification() // Your method to build a Notification
+        startForeground(NOTIFICATION_ID, notification)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
 
@@ -117,6 +123,7 @@ class OverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         return START_STICKY
     }
 
+
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val serviceChannel = NotificationChannel(
@@ -128,7 +135,14 @@ class OverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
             manager?.createNotificationChannel(serviceChannel)
         }
     }
-
+    private fun createNotification(): Notification {
+        val gyroStatus = if (gyroscopeManager.isGyroscopeAvailable()) "with gyroscope" else "touch only"
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Overlay Active")
+            .setContentText("Use your configured gestures ($gyroStatus) to launch shortcuts.")
+            .setSmallIcon(R.drawable.ic_notification) // Use the new notification icon
+            .build()
+    }
     private fun executeGestureAction(gestureType: GestureType) {
         val shortcutId = preferencesManager.getGestureMapping(gestureType)
 

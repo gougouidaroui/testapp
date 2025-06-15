@@ -2,6 +2,7 @@ package com.example.testapp
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.core.content.edit
 
 class PreferencesManager(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("gesture_mappings", Context.MODE_PRIVATE)
@@ -9,7 +10,7 @@ class PreferencesManager(context: Context) {
 
     // Gesture mappings
     fun setGestureMapping(gesture: GestureType, shortcutId: String) {
-        prefs.edit().putString(gesture.name, shortcutId).apply()
+        prefs.edit { putString(gesture.name, shortcutId) }
     }
 
     fun getGestureMapping(gesture: GestureType): String? {
@@ -17,11 +18,11 @@ class PreferencesManager(context: Context) {
     }
 
     fun clearGestureMapping(gesture: GestureType) {
-        prefs.edit().remove(gesture.name).apply()
+        prefs.edit { remove(gesture.name) }
     }
 
     fun getAllMappings(): Map<GestureType, String?> {
-        return GestureType.values().associateWith { getGestureMapping(it) }
+        return GestureType.entries.associateWith { getGestureMapping(it) }
     }
 
     // Gyroscope sensitivity settings
@@ -44,7 +45,7 @@ class PreferencesManager(context: Context) {
 
     // Individual axis sensitivity
     fun setAxisSensitivity(axis: String, sensitivity: Float) {
-        gyroPrefs.edit().putFloat("${axis}_sensitivity", sensitivity).apply()
+        gyroPrefs.edit { putFloat("${axis}_sensitivity", sensitivity) }
     }
 
     fun getAxisSensitivity(axis: String): Float {
