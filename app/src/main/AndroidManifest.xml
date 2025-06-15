@@ -7,6 +7,11 @@
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
 
+    <!-- Gyroscope feature (not required, but recommended) -->
+    <uses-feature
+        android:name="android.hardware.sensor.gyroscope"
+        android:required="false" />
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -17,6 +22,12 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Testapp"
         tools:targetApi="31">
+
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Testapp" />
+
         <activity
             android:name=".OverlayShortcutTrampolineActivity"
             android:exported="true"
@@ -33,6 +44,7 @@
                 android:name="android.app.shortcuts"
                 android:resource="@xml/shortcuts" />
         </activity>
+
         <receiver
             android:name=".OverlayShortcutReceiver"
             android:exported="true">
@@ -40,12 +52,12 @@
                 <action android:name="com.example.testapp.ACTION_SHOW_OVERLAY" />
             </intent-filter>
         </receiver>
+
         <service
             android:foregroundServiceType="shortService"
             android:name=".OverlayService"
             android:enabled="true"
             android:exported="false"
-        android:permission="android.permission.SYSTEM_ALERT_WINDOW" />
+            android:permission="android.permission.SYSTEM_ALERT_WINDOW" />
     </application>
-
 </manifest>

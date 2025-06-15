@@ -7,13 +7,13 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import com.example.testapp.ui.theme.TestappTheme
 import androidx.core.net.toUri
 
@@ -40,32 +40,61 @@ class MainActivity : ComponentActivity() {
         setContent {
             TestappTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
+                    MainContent(
+                        modifier = Modifier.padding(innerPadding),
+                        onSettingsClick = {
+                            startActivity(Intent(this@MainActivity, SettingsActivity::class.java))
+                        }
                     )
                 }
             }
         }
 
-        if (true && !Settings.canDrawOverlays(this)) {
+        if (!Settings.canDrawOverlays(this)) {
             requestOverlayPermission()
         }
     }
 }
 
 @Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
+fun MainContent(
+    modifier: Modifier = Modifier,
+    onSettingsClick: () -> Unit
+) {
+    Column(
         modifier = modifier
-    )
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Text(
+            text = "Gesture Overlay App",
+            style = MaterialTheme.typography.headlineMedium
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "Use app shortcuts or long-press the app icon to activate the overlay. Configure your gesture shortcuts in settings.",
+            style = MaterialTheme.typography.bodyMedium
+        )
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        Button(
+            onClick = onSettingsClick,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Configure Gesture Shortcuts")
+        }
+    }
 }
 
 @Preview(showBackground = true)
 @Composable
-fun GreetingPreview() {
+fun MainContentPreview() {
     TestappTheme {
-        Greeting("Android")
+        MainContent(onSettingsClick = {})
     }
 }

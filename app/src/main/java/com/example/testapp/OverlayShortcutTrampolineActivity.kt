@@ -3,19 +3,27 @@ package com.example.testapp
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 
 class OverlayShortcutTrampolineActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        Log.d("TrampolineActivity", "Shortcut activated, sending broadcast")
+
         // Create an explicit Intent for the BroadcastReceiver
         val broadcastIntent = Intent(this, OverlayShortcutReceiver::class.java).apply {
             action = "com.example.testapp.ACTION_SHOW_OVERLAY"
-            // If you need to pass data from the shortcut to the receiver,
-            // you can get it from this Activity's intent and put it here.
-            // For example: intent.getStringExtra("some_key")
+            // You can pass additional data here if needed
+            // For example: putExtra("shortcut_source", "app_shortcut")
         }
-        sendBroadcast(broadcastIntent)
+
+        try {
+            sendBroadcast(broadcastIntent)
+            Log.d("TrampolineActivity", "Broadcast sent successfully")
+        } catch (e: Exception) {
+            Log.e("TrampolineActivity", "Error sending broadcast", e)
+        }
 
         finish() // Immediately close this trampoline activity
     }
