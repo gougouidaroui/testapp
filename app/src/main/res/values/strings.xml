@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">testapp</string>
+    <string name="shortcut_overlay_short_label">Dark Overlay</string>
+    <string name="shortcut_overlay_long_label">Show Dark Overlay Screen</string>
+    <string name="shortcut_overlay_disabled_message">Overlay Shortcut Disabled</string>
+</resources>
